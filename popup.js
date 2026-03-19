@@ -27,6 +27,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     previewBold.textContent = `太字(${b})`;
   }
 
+  function updateControlsState() {
+    const isDisabled =
+      siteRule.value === "disabled" ||
+      (siteRule.value === "default" && !globalToggle.checked);
+
+    modeSelect.disabled = isDisabled;
+    weightSlider.disabled = isDisabled;
+    weightReset.disabled = isDisabled;
+
+    const weightSection = weightSlider.closest(".section");
+    const modeRow = modeSelect.closest(".row");
+    weightSection.classList.toggle("controls-disabled", isDisabled);
+    modeRow.classList.toggle("controls-disabled", isDisabled);
+  }
+
   // Get current tab hostname
   let currentHostname = null;
   try {
@@ -52,12 +67,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (currentHostname && data.siteRules[currentHostname]) {
         siteRule.value = data.siteRules[currentHostname];
       }
+      updateControlsState();
     }
   );
 
   // Save on change
   globalToggle.addEventListener("change", () => {
     chrome.storage.sync.set({ globalEnabled: globalToggle.checked });
+    updateControlsState();
   });
 
   modeSelect.addEventListener("change", () => {
@@ -93,5 +110,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       chrome.storage.sync.set({ siteRules: rules });
     });
+    updateControlsState();
   });
 });
