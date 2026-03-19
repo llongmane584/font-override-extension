@@ -1,0 +1,302 @@
+(() => {
+  "use strict";
+
+  // ── Config ──────────────────────────────────────────────
+  const DEFAULT_FONT = '"Noto Sans JP"';
+  const FALLBACK = "sans-serif";
+  const MARKER_ATTR = "data-fo-jp";
+
+  // font-family values that should be overridden
+  const OVERRIDE_TARGETS = [
+    "system-ui",
+    "-apple-system",
+    "blinkmacsystemfont",
+    "segoe ui",
+    "yu gothic",
+    "yu gothic ui",
+    "meiryo",
+    "ms pgothic",
+    "ms gothic",
+    "hiragino sans",
+    "hiragino kaku gothic pro",
+    "hiragino kaku gothic pron",
+    "sans-serif",
+    "arial",
+    "helvetica",
+    "helvetica neue",
+  ];
+
+  // font-family values that should NOT be overridden (icon fonts etc.)
+  const PRESERVE_PATTERNS = [
+    /font\s*awesome/i,
+    /material\s*(icons|symbols)/i,
+    /bootstrap\s*icons/i,
+    /ionicons/i,
+    /glyphicons/i,
+    /remixicon/i,
+    /lucide/i,
+    /phosphor/i,
+    /tabler/i,
+    /codicon/i,
+    /icon/i,
+    /emoji/i,
+    /monospace/i,
+    /mono\b/i,
+    /\bconsolas\b/i,
+    /\bcourier/i,
+    /\bmenlo\b/i,
+    /\bfira\s*code/i,
+    /\bjb\s*mono/i,
+    /\bsource\s*code/i,
+  ];
+
+  const hostname = location.hostname;
+  let enabled = true;
+  let mode = "smart"; // "smart" | "force"
+  let weightOffset = 0; // -300 to +300 (relative adjustment)
+  let styleEl = null;
+  let weightStyleEl = null;
+  let mutationObserver = null;
+  let isProcessing = false; // guard against re-entrant observer calls
+
+  // ── Settings ────────────────────────────────────────────
+  function loadSettings() {
+    return new Promise((resolve) => {
+      if (!chrome?.storage?.sync) {
+        resolve();
+        return;
+      }
+      chrome.storage.sync.get(
+        { globalEnabled: true, mode: "smart", weightOffset: 0, siteRules: {} },
+        (data) => {
+          const rule = data.siteRules[hostname];
+          if (rule === "disabled") {
+            enabled = false;
+          } else if (rule === "force") {
+            enabled = true;
+            mode = "force";
+          } else {
+            enabled = data.globalEnabled;
+            mode = data.mode || "smart";
+          }
+          weightOffset = data.weightOffset || 0;
+          resolve();
+        }
+      );
+    });
+  }
+
+  // Listen for setting changes (from popup toggle)
+  if (chrome?.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "sync") {
+        loadSettings().then(apply);
+      }
+    });
+  }
+
+  // ── Force mode: simple CSS !important ───────────────────
+  function applyForceMode() {
+    if (styleEl) styleEl.remove();
+    styleEl = document.createElement("style");
+    styleEl.id = "font-override-jp";
+    styleEl.textContent = `
+      *:not([class*="icon"]):not([class*="Icon"]):not([class*="material"]):not([class*="fa-"]):not([class*="fa "]):not([class*="glyphicon"]):not(code):not(pre):not(kbd):not(samp):not(.mono):not(.monospace),
+      *:not([class*="icon"]):not([class*="Icon"]):not([class*="material"]):not([class*="fa-"]):not([class*="fa "]):not([class*="glyphicon"]):not(code):not(pre):not(kbd):not(samp)::before,
+      *:not([class*="icon"]):not([class*="Icon"]):not([class*="material"]):not([class*="fa-"]):not([class*="fa "]):not([class*="glyphicon"]):not(code):not(pre):not(kbd):not(samp)::after {
+        font-family: ${DEFAULT_FONT}, ${FALLBACK} !important;
+      }
+    `;
+    (document.head || document.documentElement).appendChild(styleEl);
+  }
+
+  // ── Smart mode: override only target fonts ──────────────
+  function shouldOverride(fontFamily) {
+    if (!fontFamily) return false;
+    const lower = fontFamily.toLowerCase();
+
+    // Preserve icon / monospace fonts
+    for (const pat of PRESERVE_PATTERNS) {
+      if (pat.test(lower)) return false;
+    }
+
+    // Check if any segment matches override targets
+    const segments = lower.split(",").map((s) => s.trim().replace(/["']/g, ""));
+    return segments.some((seg) =>
+      OVERRIDE_TARGETS.some((t) => seg === t || seg.startsWith(t))
+    );
+  }
+
+  function buildOverrideValue(original) {
+    const cleaned = original.replace(/!important/gi, "").trim();
+    return `${DEFAULT_FONT}, ${cleaned}`;
+  }
+
+  function clampWeight(w) {
+    return Math.max(1, Math.min(1000, w));
+  }
+
+  function processElement(el) {
+    if (!(el instanceof HTMLElement)) return;
+    if (el.tagName === "SCRIPT" || el.tagName === "STYLE" || el.tagName === "LINK") return;
+
+    // Skip already-processed elements
+    if (el.hasAttribute(MARKER_ATTR)) return;
+
+    const computed = getComputedStyle(el);
+    const ff = computed.fontFamily;
+    const fontOverridden = shouldOverride(ff);
+
+    // Skip if neither font nor weight needs changing
+    if (!fontOverridden && weightOffset === 0) return;
+
+    el.setAttribute(MARKER_ATTR, "1");
+
+    if (fontOverridden) {
+      el.style.setProperty("font-family", buildOverrideValue(ff), "important");
+    }
+
+    if (weightOffset !== 0) {
+      const currentWeight = parseInt(computed.fontWeight, 10) || 400;
+      const newWeight = clampWeight(currentWeight + weightOffset);
+      el.style.setProperty("font-weight", String(newWeight), "important");
+    }
+  }
+
+  // Run a batch of DOM modifications with the observer paused
+  function runWithObserverPaused(fn) {
+    if (isProcessing) return;
+    isProcessing = true;
+    if (mutationObserver) mutationObserver.disconnect();
+
+    try {
+      fn();
+    } finally {
+      if (mutationObserver) {
+        mutationObserver.observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+        });
+      }
+      isProcessing = false;
+    }
+  }
+
+  function scanAll() {
+    runWithObserverPaused(() => {
+      const walker = document.createTreeWalker(
+        document.body || document.documentElement,
+        NodeFilter.SHOW_ELEMENT,
+        null
+      );
+      let node;
+      while ((node = walker.nextNode())) {
+        processElement(node);
+      }
+    });
+  }
+
+  function observeMutations() {
+    if (mutationObserver) mutationObserver.disconnect();
+
+    let debounceTimer = null;
+
+    mutationObserver = new MutationObserver((mutations) => {
+      if (isProcessing) return;
+
+      // Collect newly added elements
+      const newElements = [];
+      for (const m of mutations) {
+        if (m.type === "childList") {
+          for (const added of m.addedNodes) {
+            if (added instanceof HTMLElement) {
+              newElements.push(added);
+            }
+          }
+        }
+      }
+
+      if (newElements.length === 0) return;
+
+      // Debounce: batch-process after a short pause
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        runWithObserverPaused(() => {
+          for (const el of newElements) {
+            processElement(el);
+            el.querySelectorAll?.("*").forEach(processElement);
+          }
+        });
+      }, 100);
+    });
+
+    // Only watch for new nodes, NOT attribute changes (avoids infinite loop)
+    mutationObserver.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  // ── Apply / Remove ──────────────────────────────────────
+  function cleanup() {
+    if (styleEl) {
+      styleEl.remove();
+      styleEl = null;
+    }
+    if (weightStyleEl) {
+      weightStyleEl.remove();
+      weightStyleEl = null;
+    }
+    if (mutationObserver) {
+      mutationObserver.disconnect();
+      mutationObserver = null;
+    }
+    // Remove markers so re-apply works cleanly
+    document.querySelectorAll(`[${MARKER_ATTR}]`).forEach((el) => {
+      el.removeAttribute(MARKER_ATTR);
+      el.style.removeProperty("font-family");
+      el.style.removeProperty("font-weight");
+    });
+  }
+
+  function apply() {
+    cleanup();
+    if (!enabled) return;
+
+    if (mode === "force") {
+      applyForceMode();
+    }
+
+    // In smart mode: scan handles both font-family and weight
+    // In force mode: font-family is CSS-based, but weight offset still needs per-element scan
+    if (mode === "smart" || weightOffset !== 0) {
+      if (document.body) {
+        scanAll();
+      }
+      observeMutations();
+    }
+  }
+
+  // ── Init ────────────────────────────────────────────────
+  async function init() {
+    await loadSettings();
+
+    if (document.readyState === "loading") {
+      if (enabled && mode === "force") {
+        applyForceMode();
+      }
+      document.addEventListener("DOMContentLoaded", apply);
+    } else {
+      apply();
+    }
+
+    // Re-scan after full load (catches late-loaded content / web fonts)
+    window.addEventListener("load", () => {
+      if (enabled && (mode === "smart" || weightOffset !== 0)) {
+        setTimeout(scanAll, 500);
+      }
+    });
+  }
+
+  init();
+})();
