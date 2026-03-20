@@ -1,6 +1,13 @@
 (() => {
   "use strict";
 
+  const CONTROLLER_KEY = "__fontOverrideJpController__";
+  const existingController = globalThis[CONTROLLER_KEY];
+  if (existingController) {
+    existingController.refresh();
+    return;
+  }
+
   // ── Config ──────────────────────────────────────────────
   const DEFAULT_FONT = '"Noto Sans JP"';
   const FALLBACK = "sans-serif";
@@ -55,10 +62,11 @@
   let mode = "smart"; // "smart" | "force"
   let weightOffset = 0; // -300 to +300 (relative adjustment)
   let styleEl = null;
-  let weightStyleEl = null;
   let mutationObserver = null;
   let mutationDebounceTimer = null;
   let isProcessing = false; // guard against re-entrant observer calls
+  let domReadyHandler = null;
+  let messageHandler = null;
 
   // ── Settings ────────────────────────────────────────────
   function loadSettings() {
@@ -84,15 +92,6 @@
           resolve();
         }
       );
-    });
-  }
-
-  // Listen for setting changes (from popup toggle)
-  if (chrome?.storage?.onChanged) {
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === "sync") {
-        loadSettings().then(apply);
-      }
     });
   }
 
@@ -279,10 +278,6 @@
       styleEl.remove();
       styleEl = null;
     }
-    if (weightStyleEl) {
-      weightStyleEl.remove();
-      weightStyleEl = null;
-    }
     if (mutationObserver) {
       mutationObserver.disconnect();
       mutationObserver = null;
@@ -297,6 +292,22 @@
       el.style.removeProperty("font-family");
       el.style.removeProperty("font-weight");
     });
+  }
+
+  function teardown() {
+    cleanup();
+
+    if (domReadyHandler) {
+      document.removeEventListener("DOMContentLoaded", domReadyHandler);
+      domReadyHandler = null;
+    }
+
+    if (messageHandler && chrome?.runtime?.onMessage) {
+      chrome.runtime.onMessage.removeListener(messageHandler);
+      messageHandler = null;
+    }
+
+    delete globalThis[CONTROLLER_KEY];
   }
 
   function apply() {
@@ -318,18 +329,49 @@
   }
 
   // ── Init ────────────────────────────────────────────────
+  function registerMessageListener() {
+    if (!chrome?.runtime?.onMessage) return;
+
+    messageHandler = (message) => {
+      if (!message || typeof message.type !== "string") {
+        return;
+      }
+
+      if (message.type === "font-override-jp:apply") {
+        loadSettings().then(apply);
+      } else if (message.type === "font-override-jp:teardown") {
+        teardown();
+      }
+    };
+
+    chrome.runtime.onMessage.addListener(messageHandler);
+  }
+
   async function init() {
+    registerMessageListener();
     await loadSettings();
 
     if (document.readyState === "loading") {
       if (enabled && mode === "force") {
         applyForceMode();
       }
-      document.addEventListener("DOMContentLoaded", apply);
+      if (enabled) {
+        domReadyHandler = () => {
+          domReadyHandler = null;
+          apply();
+        };
+        document.addEventListener("DOMContentLoaded", domReadyHandler);
+      }
     } else {
       apply();
     }
   }
+
+  globalThis[CONTROLLER_KEY] = {
+    refresh() {
+      loadSettings().then(apply);
+    },
+  };
 
   init();
 })();
