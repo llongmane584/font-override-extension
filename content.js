@@ -76,11 +76,14 @@
         return;
       }
       chrome.storage.sync.get(
-        { globalEnabled: true, mode: "smart", weightOffset: 0, siteRules: {} },
+        { globalEnabled: false, mode: "smart", weightOffset: 0, siteRules: {} },
         (data) => {
           const rule = data.siteRules[hostname];
           if (rule === "disabled") {
             enabled = false;
+          } else if (rule === "smart") {
+            enabled = true;
+            mode = "smart";
           } else if (rule === "force") {
             enabled = true;
             mode = "force";

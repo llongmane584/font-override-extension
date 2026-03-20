@@ -8,6 +8,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const weightReset = document.getElementById("weightReset");
   const previewNormal = document.getElementById("previewNormal");
   const previewBold = document.getElementById("previewBold");
+  const effectiveStatePill = document.getElementById("effectiveStatePill");
+  const effectiveStateDetail = document.getElementById("effectiveStateDetail");
+  const weightSection = weightSlider.closest(".section");
+  const modeRow = modeSelect.closest(".row");
+  let globalMode = "smart";
 
   function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
@@ -27,19 +32,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     previewBold.textContent = `太字(${b})`;
   }
 
+  function getEffectiveState() {
+    return globalThis.FontOverrideState.buildPopupState({
+      globalEnabled: globalToggle.checked,
+      mode: globalMode,
+      siteRule: siteRule.value,
+    });
+  }
+
   function updateControlsState() {
-    const isDisabled =
-      siteRule.value === "disabled" ||
-      (siteRule.value === "default" && !globalToggle.checked);
+    const state = getEffectiveState();
+    const weightDisabled = !state.enabled;
 
-    modeSelect.disabled = isDisabled;
-    weightSlider.disabled = isDisabled;
-    weightReset.disabled = isDisabled;
+    modeSelect.value = state.mode;
+    modeSelect.disabled = state.modeLocked;
+    weightSlider.disabled = weightDisabled;
+    weightReset.disabled = weightDisabled;
+    effectiveStatePill.textContent = state.label;
+    effectiveStatePill.classList.toggle("state-on", state.enabled);
+    effectiveStatePill.classList.toggle("state-off", !state.enabled);
+    effectiveStateDetail.textContent = state.detail;
 
-    const weightSection = weightSlider.closest(".section");
-    const modeRow = modeSelect.closest(".row");
-    weightSection.classList.toggle("controls-disabled", isDisabled);
-    modeRow.classList.toggle("controls-disabled", isDisabled);
+    modeRow.classList.toggle("controls-disabled", state.modeLocked);
+    weightSection.classList.toggle("controls-disabled", weightDisabled);
   }
 
   // Get current tab hostname
@@ -59,15 +74,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   modeSelect.disabled = true;
   weightSlider.disabled = true;
   weightReset.disabled = true;
-  weightSlider.closest(".section").classList.add("controls-disabled");
-  modeSelect.closest(".row").classList.add("controls-disabled");
+  weightSection.classList.add("controls-disabled");
+  modeRow.classList.add("controls-disabled");
 
   // Load settings
   chrome.storage.sync.get(
-    { globalEnabled: true, mode: "smart", weightOffset: 0, siteRules: {} },
+    { globalEnabled: false, mode: "smart", weightOffset: 0, siteRules: {} },
     (data) => {
       globalToggle.checked = data.globalEnabled;
-      modeSelect.value = data.mode;
+      globalMode = data.mode;
+      modeSelect.value = globalMode;
       weightSlider.value = data.weightOffset || 0;
       weightValue.textContent = formatOffset(data.weightOffset || 0);
       updateWeightPreview(data.weightOffset || 0);
@@ -85,7 +101,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   modeSelect.addEventListener("change", () => {
-    chrome.storage.sync.set({ mode: modeSelect.value });
+    globalMode = modeSelect.value;
+    chrome.storage.sync.set({ mode: globalMode });
+    updateControlsState();
   });
 
   weightSlider.addEventListener("input", () => {
