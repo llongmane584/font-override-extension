@@ -1,36 +1,204 @@
-// Initialise default settings on install
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.get(
-    { globalEnabled: true, mode: "smart", siteRules: {} },
-    (data) => {
-      chrome.storage.sync.set(data);
-    }
-  );
-});
+const DEFAULT_SETTINGS = {
+  globalEnabled: true,
+  mode: "smart",
+  weightOffset: 0,
+  siteRules: {},
+};
 
-// Update badge to reflect state
-function updateBadge(tabId, enabled) {
-  const text = enabled ? "" : "OFF";
-  const color = enabled ? "#4CAF50" : "#9E9E9E";
-  chrome.action.setBadgeText({ text, tabId });
-  chrome.action.setBadgeBackgroundColor({ color, tabId });
+const CONTENT_SCRIPT_ID = "font-override-jp-main";
+const CONTENT_SCRIPT_FILE = "content.js";
+
+function getSettings() {
+  return chrome.storage.sync.get(DEFAULT_SETTINGS);
 }
 
-// When a tab is updated, check site rule and set badge
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === "complete" && tab.url) {
-    try {
-      const url = new URL(tab.url);
-      chrome.storage.sync.get(
-        { globalEnabled: true, siteRules: {} },
-        (data) => {
-          const rule = data.siteRules[url.hostname];
-          const enabled = rule === "disabled" ? false : data.globalEnabled;
-          updateBadge(tabId, enabled);
-        }
-      );
-    } catch {
-      // ignore non-http URLs
-    }
+function isSupportedUrl(url) {
+  if (!url) return false;
+
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.protocol === "http:" ||
+      parsed.protocol === "https:" ||
+      parsed.protocol === "file:" ||
+      parsed.protocol === "ftp:"
+    );
+  } catch {
+    return false;
   }
+}
+
+function getHostname(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
+function getHostMatchPatterns(hostname) {
+  if (!hostname) return [];
+
+  const basePatterns = [`*://${hostname}/*`];
+  if (hostname.includes(".") && !hostname.startsWith("*.")) {
+    basePatterns.push(`*://*.${hostname}/*`);
+  }
+  return basePatterns;
+}
+
+function resolveTabState(url, settings) {
+  const hostname = getHostname(url);
+  const rule = settings.siteRules[hostname];
+
+  if (rule === "disabled") {
+    return { enabled: false };
+  }
+
+  if (rule === "force") {
+    return { enabled: true };
+  }
+
+  return { enabled: Boolean(settings.globalEnabled) };
+}
+
+async function updateBadge(tabId, url) {
+  if (!isSupportedUrl(url)) {
+    await chrome.action.setBadgeText({ text: "", tabId });
+    return;
+  }
+
+  const settings = await getSettings();
+  const { enabled } = resolveTabState(url, settings);
+  const text = enabled ? "" : "OFF";
+  const color = enabled ? "#4CAF50" : "#9E9E9E";
+
+  await chrome.action.setBadgeText({ text, tabId });
+  await chrome.action.setBadgeBackgroundColor({ color, tabId });
+}
+
+async function registerContentScript() {
+  const settings = await getSettings();
+  const disabledHosts = Object.entries(settings.siteRules)
+    .filter(([, rule]) => rule === "disabled")
+    .flatMap(([hostname]) => getHostMatchPatterns(hostname));
+
+  const forcedHosts = Object.entries(settings.siteRules)
+    .filter(([, rule]) => rule === "force")
+    .flatMap(([hostname]) => getHostMatchPatterns(hostname));
+
+  const matches = settings.globalEnabled
+    ? ["<all_urls>"]
+    : Array.from(new Set(forcedHosts));
+
+  try {
+    await chrome.scripting.unregisterContentScripts({ ids: [CONTENT_SCRIPT_ID] });
+  } catch {
+    // Ignore if the script was not registered yet.
+  }
+
+  if (matches.length === 0) {
+    return;
+  }
+
+  await chrome.scripting.registerContentScripts([
+    {
+      id: CONTENT_SCRIPT_ID,
+      js: [CONTENT_SCRIPT_FILE],
+      matches,
+      excludeMatches: Array.from(new Set(disabledHosts)),
+      runAt: "document_start",
+      allFrames: false,
+    },
+  ]);
+}
+
+async function sendMessageIfPresent(tabId, message) {
+  try {
+    await chrome.tabs.sendMessage(tabId, message);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function injectIntoTab(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: [CONTENT_SCRIPT_FILE],
+    });
+  } catch {
+    // Ignore unsupported or transient tab states.
+  }
+}
+
+async function syncLiveTab(tabId, url) {
+  if (!isSupportedUrl(url)) {
+    return;
+  }
+
+  const settings = await getSettings();
+  const { enabled } = resolveTabState(url, settings);
+
+  if (enabled) {
+    const handled = await sendMessageIfPresent(tabId, {
+      type: "font-override-jp:apply",
+    });
+    if (!handled) {
+      await injectIntoTab(tabId);
+    }
+  } else {
+    await sendMessageIfPresent(tabId, {
+      type: "font-override-jp:teardown",
+    });
+  }
+}
+
+async function syncOpenTabs() {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(
+    tabs.map(async (tab) => {
+      if (typeof tab.id !== "number") return;
+      await syncLiveTab(tab.id, tab.url);
+      await updateBadge(tab.id, tab.url);
+    })
+  );
+}
+
+async function initialize() {
+  const settings = await getSettings();
+  await chrome.storage.sync.set(settings);
+  await registerContentScript();
+  await syncOpenTabs();
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  initialize().catch(() => {});
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  initialize().catch(() => {});
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "sync" || Object.keys(changes).length === 0) {
+    return;
+  }
+
+  registerContentScript()
+    .then(syncOpenTabs)
+    .catch(() => {});
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "loading" && !changeInfo.url) {
+    return;
+  }
+
+  const url = changeInfo.url || tab.url;
+  if (!url) {
+    return;
+  }
+
+  updateBadge(tabId, url).catch(() => {});
 });

@@ -3,7 +3,8 @@
   "name": "Font Override JP",
   "version": "1.0.0",
   "description": "日本語フォントを Noto Sans JP で上書きする拡張機能",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "scripting"],
+  "host_permissions": ["<all_urls>"],
   "icons": {
     "48": "icon48.png",
     "128": "icon128.png"
@@ -17,13 +18,5 @@
   },
   "background": {
     "service_worker": "background.js"
-  },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "document_start",
-      "all_frames": true
-    }
-  ]
+  }
 }
