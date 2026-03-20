@@ -55,6 +55,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     hostnameEl.textContent = "(不明)";
   }
 
+  // Initial disabled state until settings are loaded
+  modeSelect.disabled = true;
+  weightSlider.disabled = true;
+  weightReset.disabled = true;
+  weightSlider.closest(".section").classList.add("controls-disabled");
+  modeSelect.closest(".row").classList.add("controls-disabled");
+
   // Load settings
   chrome.storage.sync.get(
     { globalEnabled: true, mode: "smart", weightOffset: 0, siteRules: {} },
