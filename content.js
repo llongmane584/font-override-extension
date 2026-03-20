@@ -57,6 +57,7 @@
   let styleEl = null;
   let weightStyleEl = null;
   let mutationObserver = null;
+  let mutationDebounceTimer = null;
   let isProcessing = false; // guard against re-entrant observer calls
 
   // ── Settings ────────────────────────────────────────────
@@ -136,6 +137,37 @@
     return Math.max(1, Math.min(1000, w));
   }
 
+  function processSubtree(root) {
+    if (!(root instanceof HTMLElement) || !root.isConnected) return;
+
+    processElement(root);
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
+    let node;
+    while ((node = walker.nextNode())) {
+      processElement(node);
+    }
+  }
+
+  function coalesceRoots(elements) {
+    const roots = [];
+
+    for (const el of elements) {
+      if (!(el instanceof HTMLElement) || !el.isConnected) continue;
+      if (roots.some((root) => root.contains(el))) continue;
+
+      for (let i = roots.length - 1; i >= 0; i -= 1) {
+        if (el.contains(roots[i])) {
+          roots.splice(i, 1);
+        }
+      }
+
+      roots.push(el);
+    }
+
+    return roots;
+  }
+
   function processElement(el) {
     if (!(el instanceof HTMLElement)) return;
     if (el.tagName === "SCRIPT" || el.tagName === "STYLE" || el.tagName === "LINK") return;
@@ -198,35 +230,39 @@
 
   function observeMutations() {
     if (mutationObserver) mutationObserver.disconnect();
-
-    let debounceTimer = null;
+    if (mutationDebounceTimer) {
+      clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = null;
+    }
+    const pendingRoots = new Set();
 
     mutationObserver = new MutationObserver((mutations) => {
       if (isProcessing) return;
 
-      // Collect newly added elements
-      const newElements = [];
       for (const m of mutations) {
         if (m.type === "childList") {
           for (const added of m.addedNodes) {
             if (added instanceof HTMLElement) {
-              newElements.push(added);
+              pendingRoots.add(added);
             }
           }
         }
       }
 
-      if (newElements.length === 0) return;
+      if (pendingRoots.size === 0) return;
 
       // Debounce: batch-process after a short pause
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
+      clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = setTimeout(() => {
+        const roots = coalesceRoots(Array.from(pendingRoots));
+        pendingRoots.clear();
+
         runWithObserverPaused(() => {
-          for (const el of newElements) {
-            processElement(el);
-            el.querySelectorAll?.("*").forEach(processElement);
+          for (const root of roots) {
+            processSubtree(root);
           }
         });
+        mutationDebounceTimer = null;
       }, 100);
     });
 
@@ -250,6 +286,10 @@
     if (mutationObserver) {
       mutationObserver.disconnect();
       mutationObserver = null;
+    }
+    if (mutationDebounceTimer) {
+      clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = null;
     }
     // Remove markers so re-apply works cleanly
     document.querySelectorAll(`[${MARKER_ATTR}]`).forEach((el) => {
@@ -289,13 +329,6 @@
     } else {
       apply();
     }
-
-    // Re-scan after full load (catches late-loaded content / web fonts)
-    window.addEventListener("load", () => {
-      if (enabled && (mode === "smart" || weightOffset !== 0)) {
-        setTimeout(scanAll, 500);
-      }
-    });
   }
 
   init();
