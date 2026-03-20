@@ -20,8 +20,7 @@ function isSupportedUrl(url) {
     return (
       parsed.protocol === "http:" ||
       parsed.protocol === "https:" ||
-      parsed.protocol === "file:" ||
-      parsed.protocol === "ftp:"
+      parsed.protocol === "file:"
     );
   } catch {
     return false;
@@ -39,11 +38,7 @@ function getHostname(url) {
 function getHostMatchPatterns(hostname) {
   if (!hostname) return [];
 
-  const basePatterns = [`*://${hostname}/*`];
-  if (hostname.includes(".") && !hostname.startsWith("*.")) {
-    basePatterns.push(`*://*.${hostname}/*`);
-  }
-  return basePatterns;
+  return [`*://${hostname}/*`];
 }
 
 function resolveTabState(url, settings) {
@@ -61,14 +56,14 @@ function resolveTabState(url, settings) {
   return { enabled: Boolean(settings.globalEnabled) };
 }
 
-async function updateBadge(tabId, url) {
+async function updateBadge(tabId, url, settings = null) {
   if (!isSupportedUrl(url)) {
     await chrome.action.setBadgeText({ text: "", tabId });
     return;
   }
 
-  const settings = await getSettings();
-  const { enabled } = resolveTabState(url, settings);
+  const resolvedSettings = settings || (await getSettings());
+  const { enabled } = resolveTabState(url, resolvedSettings);
   const text = enabled ? "" : "OFF";
   const color = enabled ? "#4CAF50" : "#9E9E9E";
 
@@ -132,13 +127,13 @@ async function injectIntoTab(tabId) {
   }
 }
 
-async function syncLiveTab(tabId, url) {
+async function syncLiveTab(tabId, url, settings = null) {
   if (!isSupportedUrl(url)) {
     return;
   }
 
-  const settings = await getSettings();
-  const { enabled } = resolveTabState(url, settings);
+  const resolvedSettings = settings || (await getSettings());
+  const { enabled } = resolveTabState(url, resolvedSettings);
 
   if (enabled) {
     const handled = await sendMessageIfPresent(tabId, {
@@ -155,12 +150,13 @@ async function syncLiveTab(tabId, url) {
 }
 
 async function syncOpenTabs() {
+  const settings = await getSettings();
   const tabs = await chrome.tabs.query({});
   await Promise.all(
     tabs.map(async (tab) => {
       if (typeof tab.id !== "number") return;
-      await syncLiveTab(tab.id, tab.url);
-      await updateBadge(tab.id, tab.url);
+      await syncLiveTab(tab.id, tab.url, settings);
+      await updateBadge(tab.id, tab.url, settings);
     })
   );
 }
