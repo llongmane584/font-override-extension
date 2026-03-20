@@ -150,6 +150,41 @@
   .site-select label { font-size: 12px; color: #666; }
   .site-select select { margin-left: 4px; }
 
+  .state-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .state-copy {
+    min-width: 0;
+  }
+  .state-title {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .state-detail {
+    margin-top: 2px;
+    font-size: 11px;
+    color: #777;
+  }
+  .state-pill {
+    flex-shrink: 0;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #fff;
+    background: #9ca3af;
+  }
+  .state-pill.state-on {
+    background: #2563eb;
+  }
+  .state-pill.state-off {
+    background: #6b7280;
+  }
+
   /* Disabled state */
   .controls-disabled {
     opacity: 0.45;
@@ -172,10 +207,20 @@
 </header>
 
 <div class="section">
+  <div class="state-card">
+    <div class="state-copy">
+      <div class="state-title">このサイトでの状態</div>
+      <div class="state-detail" id="effectiveStateDetail">判定中</div>
+    </div>
+    <div class="state-pill state-off" id="effectiveStatePill">OFF</div>
+  </div>
+</div>
+
+<div class="section">
   <div class="row">
     <div class="label">
-      グローバル有効
-      <small>全サイトに適用</small>
+      グローバル既定
+      <small>ONで全サイトに適用</small>
     </div>
     <label class="toggle">
       <input type="checkbox" id="globalToggle">
@@ -217,6 +262,7 @@
       ルール:
       <select id="siteRule">
         <option value="default">グローバル設定に従う</option>
+        <option value="smart">常に有効（Smart）</option>
         <option value="force">常に有効（Force）</option>
         <option value="disabled">無効</option>
       </select>
@@ -226,6 +272,7 @@
 
 <div class="footer">Reload the page after changing settings</div>
 
+<script src="state.js"></script>
 <script src="popup.js"></script>
 </body>
 </html>

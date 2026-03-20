@@ -19,11 +19,14 @@ Windows環境で `system-ui` / `Yu Gothic UI` 等の見づらいフォントを 
 | **Smart**（デフォルト） | `system-ui`, `Yu Gothic`, `Meiryo`, `sans-serif` 等の対象フォントのみ上書き。アイコンフォントやmonospaceフォントは保持。 |
 | **Force** | CSS `!important` で全要素のフォントを強制上書き（アイコンフォント系クラスは除外を試みる）。 |
 
+拡張機能は初期状態ではグローバル無効です。必要なサイトだけ有効化するか、グローバル設定をONにすると全サイトへ適用されます。
+
 ### サイトごとの設定
 
 ツールバーのアイコンをクリックして、サイトごとに以下を設定可能：
 
 - **グローバル設定に従う** — 全体設定に連動
+- **常に有効（Smart）** — そのサイトだけSmartモードで上書き
 - **常に有効（Force）** — そのサイトだけForceモードで上書き
 - **無効** — そのサイトでは上書きしない
 
@@ -41,15 +44,26 @@ Windows環境で `system-ui` / `Yu Gothic UI` 等の見づらいフォントを 
 
 ```
 font-override-extension/
+├── state.js         … 状態解決ロジックの共通ユーティリティ
 ├── manifest.json    … 拡張機能定義 (Manifest V3)
 ├── content.js       … フォント上書きロジック
 ├── background.js    … バッジ管理
 ├── popup.html       … ポップアップUI
 ├── popup.js         … ポップアップロジック
+├── test/state.test.js … 状態解決ロジックの回帰テスト
+├── package.json     … テスト実行スクリプト
 ├── icon48.png       … アイコン
 ├── icon128.png      … アイコン
 └── README.md
 ```
+
+## テスト
+
+```bash
+npm test
+```
+
+`node:test` を使って、グローバル既定・サイトルール・ポップアップ状態の分岐が壊れていないかを確認できます。
 
 ## カスタマイズ
 
