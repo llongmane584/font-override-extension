@@ -57,7 +57,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     weightSection.classList.toggle("controls-disabled", weightDisabled);
   }
 
-  // Get current tab hostname
+  // Get current tab domain
   let currentDomain = null;
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

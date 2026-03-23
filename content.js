@@ -57,7 +57,7 @@
     /\bsource\s*code/i,
   ];
 
-  const hostname = globalThis.FontOverrideDomain.extractDomain(location.hostname);
+  const domain = globalThis.FontOverrideDomain.extractDomain(location.hostname);
   let enabled = true;
   let mode = "smart"; // "smart" | "force"
   let weightOffset = 0; // -300 to +300 (relative adjustment)
@@ -78,7 +78,7 @@
       chrome.storage.sync.get(
         { globalEnabled: false, mode: "smart", weightOffset: 0, siteRules: {} },
         (data) => {
-          const rule = data.siteRules[hostname];
+          const rule = data.siteRules[domain];
           if (rule === "disabled") {
             enabled = false;
           } else if (rule === "smart") {

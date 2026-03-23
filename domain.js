@@ -5,7 +5,14 @@
     return domain || hostname;
   }
 
-  const api = { extractDomain };
+  function isIPOrSingleLabel(host) {
+    if (!host) return false;
+    const parsed = tldts.parse(host);
+    if (parsed.isIp) return true;
+    return !host.includes(".");
+  }
+
+  const api = { extractDomain, isIPOrSingleLabel };
 
   root.FontOverrideDomain = api;
 
