@@ -57,7 +57,7 @@
     /\bsource\s*code/i,
   ];
 
-  const hostname = location.hostname;
+  const hostname = globalThis.FontOverrideDomain.extractDomain(location.hostname);
   let enabled = true;
   let mode = "smart"; // "smart" | "force"
   let weightOffset = 0; // -300 to +300 (relative adjustment)
