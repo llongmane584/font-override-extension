@@ -1,4 +1,4 @@
-importScripts("state.js");
+importScripts("vendor/tldts.umd.min.js", "domain.js", "state.js");
 
 const DEFAULT_SETTINGS = {
   globalEnabled: false,
@@ -31,23 +31,23 @@ function isSupportedUrl(url) {
   }
 }
 
-function getHostname(url) {
+function getDomain(url) {
   try {
-    return new URL(url).hostname;
+    return globalThis.FontOverrideDomain.extractDomain(new URL(url).hostname);
   } catch {
     return "";
   }
 }
 
-function getHostMatchPatterns(hostname) {
-  if (!hostname) return [];
+function getHostMatchPatterns(domain) {
+  if (!domain) return [];
 
-  return [`*://${hostname}/*`];
+  return [`*://${domain}/*`, `*://*.${domain}/*`];
 }
 
 function resolveTabState(url, settings) {
-  const hostname = getHostname(url);
-  return globalThis.FontOverrideState.resolveTabStateForHost(hostname, settings);
+  const domain = getDomain(url);
+  return globalThis.FontOverrideState.resolveTabStateForHost(domain, settings);
 }
 
 function drawRoundedRect(ctx, size, fillStyle) {
@@ -166,7 +166,7 @@ async function registerContentScript() {
   await chrome.scripting.registerContentScripts([
     {
       id: CONTENT_SCRIPT_ID,
-      js: [CONTENT_SCRIPT_FILE],
+      js: ["vendor/tldts.umd.min.js", "domain.js", CONTENT_SCRIPT_FILE],
       matches,
       excludeMatches: Array.from(new Set(disabledHosts)),
       runAt: "document_start",
@@ -188,7 +188,7 @@ async function injectIntoTab(tabId) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: [CONTENT_SCRIPT_FILE],
+      files: ["vendor/tldts.umd.min.js", "domain.js", CONTENT_SCRIPT_FILE],
     });
   } catch {
     // Ignore unsupported or transient tab states.
@@ -236,8 +236,27 @@ async function initialize() {
   await syncOpenTabs();
 }
 
+async function migrateSiteRulesToDomain() {
+  const settings = await getSettings();
+  const oldRules = settings.siteRules;
+  const newRules = {};
+  let migrated = false;
+
+  for (const [host, rule] of Object.entries(oldRules)) {
+    const domain = globalThis.FontOverrideDomain.extractDomain(host);
+    if (domain !== host) migrated = true;
+    if (!newRules[domain]) newRules[domain] = rule;
+  }
+
+  if (migrated) {
+    await chrome.storage.sync.set({ siteRules: newRules });
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
-  initialize().catch(() => {});
+  migrateSiteRulesToDomain()
+    .then(() => initialize())
+    .catch(() => {});
 });
 
 chrome.runtime.onStartup.addListener(() => {

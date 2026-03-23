@@ -58,13 +58,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Get current tab hostname
-  let currentHostname = null;
+  let currentDomain = null;
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.url) {
       const url = new URL(tab.url);
-      currentHostname = url.hostname;
-      hostnameEl.textContent = currentHostname;
+      currentDomain = globalThis.FontOverrideDomain.extractDomain(url.hostname);
+      hostnameEl.textContent = currentDomain;
     }
   } catch {
     hostnameEl.textContent = "(不明)";
@@ -87,8 +87,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       weightSlider.value = data.weightOffset || 0;
       weightValue.textContent = formatOffset(data.weightOffset || 0);
       updateWeightPreview(data.weightOffset || 0);
-      if (currentHostname && data.siteRules[currentHostname]) {
-        siteRule.value = data.siteRules[currentHostname];
+      if (currentDomain && data.siteRules[currentDomain]) {
+        siteRule.value = data.siteRules[currentDomain];
       }
       updateControlsState();
     }
@@ -125,13 +125,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   siteRule.addEventListener("change", () => {
-    if (!currentHostname) return;
+    if (!currentDomain) return;
     chrome.storage.sync.get({ siteRules: {} }, (data) => {
       const rules = data.siteRules;
       if (siteRule.value === "default") {
-        delete rules[currentHostname];
+        delete rules[currentDomain];
       } else {
-        rules[currentHostname] = siteRule.value;
+        rules[currentDomain] = siteRule.value;
       }
       chrome.storage.sync.set({ siteRules: rules });
     });

@@ -3,5 +3,8 @@
   "private": true,
   "scripts": {
     "test": "node --test"
+  },
+  "devDependencies": {
+    "tldts": "^7.0.27"
   }
 }
