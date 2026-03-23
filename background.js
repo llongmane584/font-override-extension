@@ -42,6 +42,9 @@ function getDomain(url) {
 function getHostMatchPatterns(domain) {
   if (!domain) return [];
 
+  if (globalThis.FontOverrideDomain.isIPOrSingleLabel(domain)) {
+    return [`*://${domain}/*`];
+  }
   return [`*://${domain}/*`, `*://*.${domain}/*`];
 }
 
@@ -240,12 +243,29 @@ async function migrateSiteRulesToDomain() {
   const settings = await getSettings();
   const oldRules = settings.siteRules;
   const newRules = {};
+  const ruleSource = {};
   let migrated = false;
 
   for (const [host, rule] of Object.entries(oldRules)) {
     const domain = globalThis.FontOverrideDomain.extractDomain(host);
     if (domain !== host) migrated = true;
-    if (!newRules[domain]) newRules[domain] = rule;
+
+    if (!ruleSource[domain]) {
+      newRules[domain] = rule;
+      ruleSource[domain] = host;
+    } else {
+      const existing = ruleSource[domain];
+      const existingIsExact = existing === domain;
+      const currentIsExact = host === domain;
+
+      if (currentIsExact && !existingIsExact) {
+        newRules[domain] = rule;
+        ruleSource[domain] = host;
+      } else if (!currentIsExact && !existingIsExact && host < existing) {
+        newRules[domain] = rule;
+        ruleSource[domain] = host;
+      }
+    }
   }
 
   if (migrated) {
