@@ -13,6 +13,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const weightSection = weightSlider.closest(".section");
   const modeRow = modeSelect.closest(".row");
   let globalMode = "smart";
+  let isWeightSiteSpecific = false;
+  const weightSourceEl = document.getElementById("weightSource");
 
   function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
@@ -21,6 +23,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   function formatOffset(v) {
     if (v === 0) return "±0";
     return v > 0 ? `+${v}` : String(v);
+  }
+
+  function updateWeightSourceIndicator() {
+    if (!weightSourceEl) return;
+    if (isWeightSiteSpecific) {
+      weightSourceEl.textContent = "このサイト固有の設定";
+      weightSourceEl.classList.add("source-site");
+    } else {
+      weightSourceEl.textContent = "未設定";
+      weightSourceEl.classList.remove("source-site");
+    }
   }
 
   function updateWeightPreview(offset) {
@@ -79,14 +92,18 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Load settings
   chrome.storage.sync.get(
-    { globalEnabled: false, mode: "smart", weightOffset: 0, siteRules: {} },
+    { globalEnabled: false, mode: "smart", siteRules: {}, siteWeights: {} },
     (data) => {
       globalToggle.checked = data.globalEnabled;
       globalMode = data.mode;
       modeSelect.value = globalMode;
-      weightSlider.value = data.weightOffset || 0;
-      weightValue.textContent = formatOffset(data.weightOffset || 0);
-      updateWeightPreview(data.weightOffset || 0);
+      const siteWeight = currentDomain ? data.siteWeights[currentDomain] : undefined;
+      isWeightSiteSpecific = siteWeight !== undefined;
+      const effectiveWeight = isWeightSiteSpecific ? siteWeight : 0;
+      weightSlider.value = effectiveWeight;
+      weightValue.textContent = formatOffset(effectiveWeight);
+      updateWeightPreview(effectiveWeight);
+      updateWeightSourceIndicator();
       if (currentDomain && data.siteRules[currentDomain]) {
         siteRule.value = data.siteRules[currentDomain];
       }
@@ -113,15 +130,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   weightSlider.addEventListener("change", () => {
+    if (!currentDomain) return;
     const offset = parseInt(weightSlider.value, 10);
-    chrome.storage.sync.set({ weightOffset: offset });
+    chrome.storage.sync.get({ siteWeights: {} }, (data) => {
+      const weights = data.siteWeights;
+      weights[currentDomain] = offset;
+      chrome.storage.sync.set({ siteWeights: weights });
+    });
+    isWeightSiteSpecific = true;
+    updateWeightSourceIndicator();
   });
 
   weightReset.addEventListener("click", () => {
+    if (!currentDomain) return;
+    chrome.storage.sync.get({ siteWeights: {} }, (data) => {
+      const weights = data.siteWeights;
+      delete weights[currentDomain];
+      chrome.storage.sync.set({ siteWeights: weights });
+    });
     weightSlider.value = 0;
     weightValue.textContent = "±0";
     updateWeightPreview(0);
-    chrome.storage.sync.set({ weightOffset: 0 });
+    isWeightSiteSpecific = false;
+    updateWeightSourceIndicator();
   });
 
   siteRule.addEventListener("change", () => {

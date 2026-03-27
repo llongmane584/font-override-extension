@@ -76,7 +76,7 @@
         return;
       }
       chrome.storage.sync.get(
-        { globalEnabled: false, mode: "smart", weightOffset: 0, siteRules: {} },
+        { globalEnabled: false, mode: "smart", siteRules: {}, siteWeights: {} },
         (data) => {
           const rule = data.siteRules[domain];
           if (rule === "disabled") {
@@ -91,7 +91,7 @@
             enabled = data.globalEnabled;
             mode = data.mode || "smart";
           }
-          weightOffset = data.weightOffset || 0;
+          weightOffset = data.siteWeights[domain] || 0;
           resolve();
         }
       );

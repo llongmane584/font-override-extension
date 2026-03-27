@@ -3,8 +3,8 @@ importScripts("vendor/tldts.umd.min.js", "domain.js", "state.js");
 const DEFAULT_SETTINGS = {
   globalEnabled: false,
   mode: "smart",
-  weightOffset: 0,
   siteRules: {},
+  siteWeights: {},
 };
 
 const CONTENT_SCRIPT_ID = "font-override-jp-main";
