@@ -3,6 +3,8 @@ const assert = require("node:assert/strict");
 
 const {
   buildPopupState,
+  getAutoForceKey,
+  getModeLabel,
   resolveTabStateForHost,
 } = require("../state.js");
 
@@ -106,4 +108,76 @@ test("tab state follows global default for sites without explicit rule", () => {
     mode: "smart",
     reason: "global-disabled",
   });
+});
+
+test("site auto rule enables Auto mode even when global default is OFF", () => {
+  const state = buildPopupState({
+    globalEnabled: false,
+    mode: "smart",
+    siteRule: "auto",
+  });
+
+  assert.equal(state.enabled, true);
+  assert.equal(state.mode, "auto");
+  assert.equal(state.reason, "site-auto");
+  assert.equal(state.modeLocked, true);
+  assert.equal(state.detail, "このサイトでは Auto ルールで有効");
+  assert.equal(state.autoStatus, "pending");
+});
+
+test("global Auto mode reports the saved Force verdict", () => {
+  const state = buildPopupState({
+    globalEnabled: true,
+    mode: "auto",
+    siteRule: "default",
+    autoForced: true,
+  });
+
+  assert.equal(state.enabled, true);
+  assert.equal(state.mode, "auto");
+  assert.equal(state.detail, "グローバル既定に従い Auto で有効");
+  assert.equal(state.autoStatus, "forced");
+});
+
+test("saved Auto verdict is not reported when Auto is not effective", () => {
+  const disabled = buildPopupState({
+    globalEnabled: true,
+    mode: "auto",
+    siteRule: "disabled",
+    autoForced: true,
+  });
+  const smart = buildPopupState({
+    globalEnabled: true,
+    mode: "auto",
+    siteRule: "smart",
+    autoForced: true,
+  });
+
+  assert.equal(disabled.autoStatus, null);
+  assert.equal(smart.autoStatus, null);
+});
+
+test("tab state follows site-specific auto rule", () => {
+  const state = resolveTabStateForHost("example.com", {
+    globalEnabled: false,
+    mode: "force",
+    siteRules: {
+      "example.com": "auto",
+    },
+  });
+
+  assert.deepEqual(state, {
+    enabled: true,
+    mode: "auto",
+    reason: "site-auto",
+  });
+});
+
+test("Auto verdicts are stored under one key per domain", () => {
+  assert.equal(getAutoForceKey("example.com"), "autoForce:example.com");
+});
+
+test("unknown mode labels fail loudly", () => {
+  assert.equal(getModeLabel("auto"), "Auto");
+  assert.throws(() => getModeLabel("bogus"), /Unknown mode: bogus/);
 });

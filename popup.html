@@ -193,6 +193,21 @@
   .state-pill.state-off {
     background: #6b7280;
   }
+  .auto-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 11px;
+    color: #555;
+  }
+  .auto-status[hidden] { display: none; }
+  .auto-status button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .auto-status.auto-forced { color: #2563eb; }
 
   /* Disabled state */
   .controls-disabled {
@@ -223,6 +238,10 @@
     </div>
     <div class="state-pill state-off" id="effectiveStatePill">OFF</div>
   </div>
+  <div class="auto-status" id="autoStatus" hidden>
+    <span id="autoStatusText"></span>
+    <button class="range-reset" id="autoRejudge" hidden>再判定</button>
+  </div>
 </div>
 
 <div class="section">
@@ -241,6 +260,7 @@
     <select id="modeSelect">
       <option value="smart">Smart（対象フォントのみ）</option>
       <option value="force">Force（全フォント上書き）</option>
+      <option value="auto">Auto（見づらい時だけForce）</option>
     </select>
   </div>
 </div>
@@ -274,6 +294,7 @@
         <option value="default">グローバル設定に従う</option>
         <option value="smart">常に有効（Smart）</option>
         <option value="force">常に有効（Force）</option>
+        <option value="auto">常に有効（Auto）</option>
         <option value="disabled">無効</option>
       </select>
     </label>

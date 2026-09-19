@@ -8,7 +8,13 @@ const DEFAULT_SETTINGS = {
 };
 
 const CONTENT_SCRIPT_ID = "font-override-jp-main";
-const CONTENT_SCRIPT_FILE = "content.js";
+const CONTENT_SCRIPT_FILES = [
+  "vendor/tldts.umd.min.js",
+  "domain.js",
+  "state.js",
+  "font-judge.js",
+  "content.js",
+];
 const ACTION_ICON_SIZES = [16, 32, 48, 128];
 const ACTION_ICON_CACHE = new Map();
 
@@ -117,7 +123,7 @@ async function updateActionIcon(tabId, state) {
 
 async function updateActionTitle(tabId, state) {
   const title = state.enabled
-    ? `Font Override JP: ON (${state.mode === "force" ? "Force" : "Smart"})`
+    ? `Font Override JP: ON (${globalThis.FontOverrideState.getModeLabel(state.mode)})`
     : "Font Override JP: OFF";
   await chrome.action.setTitle({ tabId, title });
 }
@@ -149,7 +155,7 @@ async function registerContentScript() {
     .flatMap(([hostname]) => getHostMatchPatterns(hostname));
 
   const explicitlyEnabledHosts = Object.entries(settings.siteRules)
-    .filter(([, rule]) => rule === "smart" || rule === "force")
+    .filter(([, rule]) => rule === "smart" || rule === "force" || rule === "auto")
     .flatMap(([hostname]) => getHostMatchPatterns(hostname));
 
   const matches = settings.globalEnabled
@@ -169,7 +175,7 @@ async function registerContentScript() {
   await chrome.scripting.registerContentScripts([
     {
       id: CONTENT_SCRIPT_ID,
-      js: ["vendor/tldts.umd.min.js", "domain.js", CONTENT_SCRIPT_FILE],
+      js: CONTENT_SCRIPT_FILES,
       matches,
       excludeMatches: Array.from(new Set(disabledHosts)),
       runAt: "document_start",
@@ -191,7 +197,7 @@ async function injectIntoTab(tabId) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ["vendor/tldts.umd.min.js", "domain.js", CONTENT_SCRIPT_FILE],
+      files: CONTENT_SCRIPT_FILES,
     });
   } catch {
     // Ignore unsupported or transient tab states.

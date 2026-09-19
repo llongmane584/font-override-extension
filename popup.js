@@ -10,10 +10,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   const previewBold = document.getElementById("previewBold");
   const effectiveStatePill = document.getElementById("effectiveStatePill");
   const effectiveStateDetail = document.getElementById("effectiveStateDetail");
+  const autoStatusEl = document.getElementById("autoStatus");
+  const autoStatusText = document.getElementById("autoStatusText");
+  const autoRejudge = document.getElementById("autoRejudge");
   const weightSection = weightSlider.closest(".section");
   const modeRow = modeSelect.closest(".row");
   let globalMode = "smart";
   let isWeightSiteSpecific = false;
+  let autoForced = false;
   const weightSourceEl = document.getElementById("weightSource");
 
   function clamp(v, min, max) {
@@ -50,7 +54,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       globalEnabled: globalToggle.checked,
       mode: globalMode,
       siteRule: siteRule.value,
+      autoForced,
     });
+  }
+
+  function updateAutoStatus(autoStatus) {
+    autoStatusEl.hidden = autoStatus === null;
+    autoStatusEl.classList.toggle("auto-forced", autoStatus === "forced");
+    autoRejudge.hidden = autoStatus !== "forced";
+    if (autoStatus === "forced") {
+      autoStatusText.textContent = "自動判定: Windows 標準フォントを検出し Force を適用中";
+    } else if (autoStatus === "pending") {
+      autoStatusText.textContent = "自動判定: 見づらいフォントは未検出";
+    }
   }
 
   function updateControlsState() {
@@ -65,15 +81,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     effectiveStatePill.classList.toggle("state-on", state.enabled);
     effectiveStatePill.classList.toggle("state-off", !state.enabled);
     effectiveStateDetail.textContent = state.detail;
+    updateAutoStatus(state.autoStatus);
 
     modeRow.classList.toggle("controls-disabled", state.modeLocked);
     weightSection.classList.toggle("controls-disabled", weightDisabled);
   }
 
   // Get current tab domain
+  let currentTabId = null;
   let currentDomain = null;
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    currentTabId = tab?.id ?? null;
     if (tab?.url) {
       const url = new URL(tab.url);
       currentDomain = globalThis.FontOverrideDomain.extractDomain(url.hostname);
@@ -91,25 +110,33 @@ document.addEventListener("DOMContentLoaded", async () => {
   modeRow.classList.add("controls-disabled");
 
   // Load settings
-  chrome.storage.sync.get(
-    { globalEnabled: false, mode: "smart", siteRules: {}, siteWeights: {} },
-    (data) => {
-      globalToggle.checked = data.globalEnabled;
-      globalMode = data.mode;
-      modeSelect.value = globalMode;
-      const siteWeight = currentDomain ? data.siteWeights[currentDomain] : undefined;
-      isWeightSiteSpecific = siteWeight !== undefined;
-      const effectiveWeight = isWeightSiteSpecific ? siteWeight : 0;
-      weightSlider.value = effectiveWeight;
-      weightValue.textContent = formatOffset(effectiveWeight);
-      updateWeightPreview(effectiveWeight);
-      updateWeightSourceIndicator();
-      if (currentDomain && data.siteRules[currentDomain]) {
-        siteRule.value = data.siteRules[currentDomain];
-      }
-      updateControlsState();
-    }
-  );
+  const autoForceKey = currentDomain
+    ? globalThis.FontOverrideState.getAutoForceKey(currentDomain)
+    : null;
+  const [data, local] = await Promise.all([
+    chrome.storage.sync.get({
+      globalEnabled: false,
+      mode: "smart",
+      siteRules: {},
+      siteWeights: {},
+    }),
+    autoForceKey ? chrome.storage.local.get({ [autoForceKey]: false }) : {},
+  ]);
+  globalToggle.checked = data.globalEnabled;
+  globalMode = data.mode;
+  modeSelect.value = globalMode;
+  autoForced = autoForceKey ? local[autoForceKey] === true : false;
+  const siteWeight = currentDomain ? data.siteWeights[currentDomain] : undefined;
+  isWeightSiteSpecific = siteWeight !== undefined;
+  const effectiveWeight = isWeightSiteSpecific ? siteWeight : 0;
+  weightSlider.value = effectiveWeight;
+  weightValue.textContent = formatOffset(effectiveWeight);
+  updateWeightPreview(effectiveWeight);
+  updateWeightSourceIndicator();
+  if (currentDomain && data.siteRules[currentDomain]) {
+    siteRule.value = data.siteRules[currentDomain];
+  }
+  updateControlsState();
 
   // Save on change
   globalToggle.addEventListener("change", () => {
@@ -153,6 +180,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateWeightPreview(0);
     isWeightSiteSpecific = false;
     updateWeightSourceIndicator();
+  });
+
+  // Forget the verdict and reload so that the page is judged again
+  autoRejudge.addEventListener("click", async () => {
+    if (!autoForceKey || currentTabId === null) return;
+    await chrome.storage.local.remove(autoForceKey);
+    await chrome.tabs.reload(currentTabId);
+    window.close();
   });
 
   siteRule.addEventListener("change", () => {
