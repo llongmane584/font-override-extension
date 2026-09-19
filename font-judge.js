@@ -56,12 +56,11 @@
   const OTHER_GENERIC_FAMILIES = ["serif", "cursive", "fantasy"];
   const MINCHO_PATTERN = /mincho|明朝/;
 
-  const KANA_PATTERN = /[ぁ-ゖァ-ヺーｦ-ﾝ]/g;
-  const PRIVATE_USE_PATTERN = /[-]/;
+  const KANA_PATTERN = /[\u3041-\u3096\u30a1-\u30fa\u30fc\uff66-\uff9d]/g;
+  const PRIVATE_USE_PATTERN = /[\ue000-\uf8ff]/;
   const KANA_PROBE_CODE_POINT = 0x3042; // "あ"
 
   const MIN_KANA_FOR_VERDICT = 20;
-  const KANA_SAMPLE_LIMIT = 3000;
 
   function normalizeFamily(family) {
     return family
@@ -83,8 +82,9 @@
     return names.some((name) => family === name || family.startsWith(`${name} `));
   }
 
-  // Judge by the primary family: a stack like "Segoe UI, ..., Segoe UI Emoji"
-  // is body text even though it contains an emoji fallback.
+  // Force / Auto judge by the primary family: a stack like
+  // "Segoe UI, ..., Segoe UI Emoji" is body text even though it contains an
+  // emoji fallback. (Smart's shouldOverride still tests the whole string.)
   function isPreservedFontStack(families) {
     if (families.length === 0) return false;
     return (
@@ -157,11 +157,8 @@
   }
 
   function judgeKanaStats({ poor, ok }) {
-    const total = poor + ok;
-    if (total < MIN_KANA_FOR_VERDICT) return "undecided";
-    if (poor > ok) return "force";
-    if (total >= KANA_SAMPLE_LIMIT) return "keep";
-    return "undecided";
+    if (poor + ok < MIN_KANA_FOR_VERDICT) return "undecided";
+    return poor > ok ? "force" : "keep";
   }
 
   const api = {

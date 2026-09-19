@@ -103,6 +103,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Initial disabled state until settings are loaded
+  globalToggle.disabled = true;
+  siteRule.disabled = true;
   modeSelect.disabled = true;
   weightSlider.disabled = true;
   weightReset.disabled = true;
@@ -136,6 +138,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (currentDomain && data.siteRules[currentDomain]) {
     siteRule.value = data.siteRules[currentDomain];
   }
+  globalToggle.disabled = false;
+  siteRule.disabled = false;
   updateControlsState();
 
   // Save on change

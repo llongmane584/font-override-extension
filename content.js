@@ -37,6 +37,9 @@
     "helvetica neue",
   ];
 
+  // Auto mode gives up when too little kana appears within this window
+  const DETECTION_WINDOW_MS = 10000;
+
   const SKIPPED_TAGS = new Set(["SCRIPT", "STYLE", "LINK"]);
   const KANA_SKIPPED_PARENTS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA"]);
 
@@ -53,7 +56,7 @@
   let isProcessing = false; // guard against re-entrant observer calls
   let domReadyHandler = null;
   let messageHandler = null;
-  let detection = null; // Auto mode: { stats, ready, wait }
+  let detection = null; // Auto mode: { stats, ready, wait, giveUpTimer }
 
   // ── Settings ────────────────────────────────────────────
   async function loadSettings() {
@@ -282,7 +285,7 @@
   }
 
   function startAutoDetection() {
-    detection = { stats: { poor: 0, ok: 0 }, ready: false, wait: null };
+    detection = { stats: { poor: 0, ok: 0 }, ready: false, wait: null, giveUpTimer: null };
     waitForStyles();
   }
 
@@ -294,6 +297,8 @@
       waitForEvent(window, "load");
     } else {
       detection.ready = true;
+      // e.g. pages without Japanese text, or SPAs that never render enough kana
+      detection.giveUpTimer = setTimeout(finishAutoDetection, DETECTION_WINDOW_MS);
       countKanaByFont([document.body || document.documentElement]);
       concludeDetection();
     }
@@ -313,7 +318,16 @@
       const { target, type, handler } = detection.wait;
       target.removeEventListener(type, handler);
     }
+    if (detection?.giveUpTimer) {
+      clearTimeout(detection.giveUpTimer);
+    }
     detection = null;
+  }
+
+  // Leave the page as it is; the observer is kept only for the weight offset
+  function finishAutoDetection() {
+    stopAutoDetection();
+    if (!needsElementScan()) stopObserving();
   }
 
   function countKanaByFont(roots) {
@@ -352,8 +366,7 @@
     if (verdict === "force") {
       enableAutoForce();
     } else if (verdict === "keep") {
-      stopAutoDetection();
-      if (!needsElementScan()) stopObserving();
+      finishAutoDetection();
     }
   }
 

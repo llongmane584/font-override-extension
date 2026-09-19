@@ -104,7 +104,7 @@ test("kana are counted while kanji-only (possibly Chinese) text is not", () => {
 });
 
 test("private use area characters identify icon glyphs", () => {
-  assert.equal(hasPrivateUseChar('""'), true);
+  assert.equal(hasPrivateUseChar('"\ue900"'), true);
   assert.equal(hasPrivateUseChar('"→"'), false);
 });
 
@@ -112,6 +112,6 @@ test("Force is chosen only when poor text is the majority of enough kana", () =>
   assert.equal(judgeKanaStats({ poor: 19, ok: 0 }), "undecided");
   assert.equal(judgeKanaStats({ poor: 20, ok: 0 }), "force");
   assert.equal(judgeKanaStats({ poor: 60, ok: 40 }), "force");
-  assert.equal(judgeKanaStats({ poor: 50, ok: 50 }), "undecided");
-  assert.equal(judgeKanaStats({ poor: 1000, ok: 2000 }), "keep");
+  assert.equal(judgeKanaStats({ poor: 50, ok: 50 }), "keep");
+  assert.equal(judgeKanaStats({ poor: 0, ok: 20 }), "keep");
 });
