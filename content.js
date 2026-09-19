@@ -80,6 +80,24 @@
     weightOffset = data.siteWeights[domain] || 0;
   }
 
+  // After the extension is reloaded or updated, this copy is orphaned: chrome.*
+  // APIs are gone and a freshly injected copy takes over. Stop quietly without
+  // touching the markers and inline styles that the new copy has adopted.
+  function stopIfOrphaned() {
+    if (chrome.runtime?.id) return false;
+    stopAutoDetection();
+    stopObserving();
+    if (styleEl) {
+      styleEl.remove();
+      styleEl = null;
+    }
+    if (domReadyHandler) {
+      document.removeEventListener("DOMContentLoaded", domReadyHandler);
+      domReadyHandler = null;
+    }
+    return true;
+  }
+
   function isForceActive() {
     return mode === "force" || (mode === "auto" && autoForced);
   }
@@ -307,6 +325,7 @@
   function waitForEvent(target, type) {
     const handler = () => {
       detection.wait = null;
+      if (stopIfOrphaned()) return;
       waitForStyles();
     };
     target.addEventListener(type, handler, { once: true });
@@ -402,6 +421,7 @@
       clearTimeout(mutationDebounceTimer);
       mutationDebounceTimer = setTimeout(() => {
         mutationDebounceTimer = null;
+        if (stopIfOrphaned()) return;
         const roots = coalesceRoots(Array.from(pendingRoots));
         pendingRoots.clear();
 
@@ -530,6 +550,7 @@
       if (enabled) {
         domReadyHandler = () => {
           domReadyHandler = null;
+          if (stopIfOrphaned()) return;
           apply();
         };
         document.addEventListener("DOMContentLoaded", domReadyHandler);
