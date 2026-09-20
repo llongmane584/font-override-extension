@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const autoRejudge = document.getElementById("autoRejudge");
   const weightSection = weightSlider.closest(".section");
   const modeRow = modeSelect.closest(".row");
+  document.getElementById("appVersion").textContent = `v${chrome.runtime.getManifest().version}`;
   let globalMode = "smart";
   let isWeightSiteSpecific = false;
   let autoForced = false;

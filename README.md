@@ -5,10 +5,20 @@ Windows環境で `system-ui` / `Yu Gothic UI` 等の見づらいフォントを 
 ## インストール
 
 1. [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Sans+JP) から **Noto Sans JP** をダウンロードしてシステムにインストール
-2. Chrome で `chrome://extensions/` を開く
-3. 右上の「デベロッパーモード」をONにする
-4. 「パッケージ化されていない拡張機能を読み込む」をクリック
-5. この `font-override-extension` フォルダを選択
+2. [Releases](https://github.com/llongmane584/font-override-extension/releases) から最新版の Source code (zip) をダウンロードして展開する
+   （git を使う場合は `git clone -b main https://github.com/llongmane584/font-override-extension.git`。既定ブランチの `dev` は開発中の変更を含む）
+3. Chrome で `chrome://extensions/` を開く
+4. 右上の「デベロッパーモード」をONにする
+5. 「パッケージ化されていない拡張機能を読み込む」をクリック
+6. 展開した（clone した）フォルダを選択
+
+## バージョンと更新
+
+`main` ブランチが最新のリリースです。版ごとの変更点は [CHANGELOG.md](CHANGELOG.md) と
+[Releases](https://github.com/llongmane584/font-override-extension/releases) にあります。
+
+更新するときは新しい版を同じフォルダへ上書き展開するか `main` を pull してから、`chrome://extensions/` で本拡張の再読み込みボタンを押してください。
+読み込んでいる版はポップアップの右上に表示されます。
 
 ## 機能
 
@@ -78,9 +88,12 @@ font-override-extension/
 ├── popup.js         … ポップアップロジック
 ├── test/state.test.js … 状態解決ロジックの回帰テスト
 ├── test/font-judge.test.js … Auto 判定ロジックのテスト
+├── test/version.test.js … manifest.json と CHANGELOG.md の版の一致を確認するテスト
 ├── package.json     … テスト実行スクリプト
 ├── icon48.png       … アイコン
 ├── icon128.png      … アイコン
+├── CHANGELOG.md     … 更新履歴
+├── docs/RELEASE.md  … リリース手順
 └── README.md
 ```
 
@@ -90,7 +103,7 @@ font-override-extension/
 npm test
 ```
 
-`node:test` を使って、グローバル既定・サイトルール・ポップアップ状態の分岐と、Auto の判定ロジックが壊れていないかを確認できます。
+`node:test` を使って、グローバル既定・サイトルール・ポップアップ状態の分岐と、Auto の判定ロジックが壊れていないか、`manifest.json` と `CHANGELOG.md` の版が食い違っていないかを確認できます。
 
 ## カスタマイズ
 
