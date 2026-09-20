@@ -12,13 +12,6 @@ Windows環境で `system-ui` / `Yu Gothic UI` 等の見づらいフォントを 
 5. 「パッケージ化されていない拡張機能を読み込む」をクリック
 6. 展開した（clone した）フォルダを選択
 
-## バージョンと更新
-
-`main` ブランチが最新のリリースです。版ごとの変更点は [CHANGELOG.md](CHANGELOG.md) と
-[Releases](https://github.com/llongmane584/font-override-extension/releases) にあります。
-
-更新するときは新しい版を同じフォルダへ上書き展開するか `main` を pull してから、`chrome://extensions/` で本拡張の再読み込みボタンを押してください。
-読み込んでいる版はポップアップの右上に表示されます。
 
 ## 機能
 
@@ -74,28 +67,6 @@ Force と判定したドメインは `chrome.storage.local` に記録し、次�
 
 ポップアップのスライダーで調整でき、プレビューで 400（通常）と 700（太字）の変化を確認できます。
 
-## ファイル構成
-
-```
-font-override-extension/
-├── state.js         … 状態解決ロジックの共通ユーティリティ
-├── font-judge.js    … Auto の判定・フォント保護の純関数
-├── domain.js        … サイト設定のドメイン抽出
-├── manifest.json    … 拡張機能定義 (Manifest V3)
-├── content.js       … フォント上書きロジック
-├── background.js    … バッジ管理
-├── popup.html       … ポップアップUI
-├── popup.js         … ポップアップロジック
-├── test/state.test.js … 状態解決ロジックの回帰テスト
-├── test/font-judge.test.js … Auto 判定ロジックのテスト
-├── test/version.test.js … manifest.json と CHANGELOG.md の版の一致を確認するテスト
-├── package.json     … テスト実行スクリプト
-├── icon48.png       … アイコン
-├── icon128.png      … アイコン
-├── CHANGELOG.md     … 更新履歴
-├── docs/RELEASE.md  … リリース手順
-└── README.md
-```
 
 ## テスト
 
