@@ -70,8 +70,16 @@ Force と判定したドメインは `chrome.storage.local` に記録し、次�
 
 ## テスト
 
+開発環境では `package.json` で固定した pnpm 12 を使用します。最初に依存関係をインストールします。
+
 ```bash
-npm test
+pnpm install
+```
+
+テストを実行します。
+
+```bash
+pnpm test
 ```
 
 `node:test` を使って、グローバル既定・サイトルール・ポップアップ状態の分岐と、Auto の判定ロジックが壊れていないか、`manifest.json` と `CHANGELOG.md` の版が食い違っていないかを確認できます。

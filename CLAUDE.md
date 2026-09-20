@@ -18,4 +18,4 @@ Chrome 拡張機能 (Manifest V3)。ビルド工程は無く、リポジトリ�
 
 ## Testing
 
-- `npm test` (`node --test`)。CI も Git フックも無いので、変更のたびに手で走らせる。
+- `pnpm test` (`node --test`)。CI も Git フックも無いので、変更のたびに手で走らせる。
