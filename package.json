@@ -1,6 +1,14 @@
 {
   "name": "font-override-extension",
   "private": true,
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.5.1",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "pnpm@12.5.1",
   "scripts": {
     "test": "node --test"
   },
