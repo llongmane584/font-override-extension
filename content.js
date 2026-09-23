@@ -39,6 +39,9 @@
 
   // Auto mode gives up when too little kana appears within this window
   const DETECTION_WINDOW_MS = 10000;
+  // Auto mode: Latin text whose width differs between typical fonts
+  const FONT_PROBE_TEXT = "mmmmmmmmmmlli0Oo WwQ@";
+  const FONT_PROBE_GENERICS = ["monospace", "serif"];
 
   const SKIPPED_TAGS = new Set(["SCRIPT", "STYLE", "LINK"]);
   const KANA_SKIPPED_PARENTS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA"]);
@@ -56,7 +59,7 @@
   let isProcessing = false; // guard against re-entrant observer calls
   let domReadyHandler = null;
   let messageHandler = null;
-  let detection = null; // Auto mode: { stats, ready, wait, giveUpTimer }
+  let detection = null; // Auto mode: { stats, fontAvailability, ready, wait, giveUpTimer }
 
   // ── Settings ────────────────────────────────────────────
   async function loadSettings() {
@@ -303,7 +306,13 @@
   }
 
   function startAutoDetection() {
-    detection = { stats: { poor: 0, ok: 0 }, ready: false, wait: null, giveUpTimer: null };
+    detection = {
+      stats: { poor: 0, ok: 0 },
+      fontAvailability: new Map(),
+      ready: false,
+      wait: null,
+      giveUpTimer: null,
+    };
     waitForStyles();
   }
 
@@ -317,7 +326,10 @@
       detection.ready = true;
       // e.g. pages without Japanese text, or SPAs that never render enough kana
       detection.giveUpTimer = setTimeout(finishAutoDetection, DETECTION_WINDOW_MS);
-      countKanaByFont([document.body || document.documentElement]);
+      // Paused because isFontAvailable adds a probe element
+      runWithObserverPaused(() => {
+        countKanaByFont([document.body || document.documentElement]);
+      });
       concludeDetection();
     }
   }
@@ -349,6 +361,39 @@
     if (!needsElementScan()) stopObserving();
   }
 
+  // Whether the page can use a locally installed font. Brave hides user-installed
+  // fonts that a page names, and document.fonts.check() is true even for missing
+  // fonts, so compare the rendered widths with and without the font.
+  // Call it with the observer paused.
+  function isFontAvailable(family) {
+    const cache = detection.fontAvailability;
+    if (cache.has(family)) return cache.get(family);
+
+    const probe = document.createElement("span");
+    probe.textContent = FONT_PROBE_TEXT;
+    // Inline !important keeps page rules from making both widths equal
+    probe.style.cssText =
+      "all: initial !important; position: absolute !important; top: 0 !important;" +
+      " left: 0 !important; visibility: hidden !important; white-space: nowrap !important;" +
+      " font-size: 72px !important;";
+    const measure = (fontFamily) => {
+      probe.style.setProperty("font-family", fontFamily, "important");
+      return probe.getBoundingClientRect().width;
+    };
+
+    document.documentElement.appendChild(probe);
+    let available;
+    try {
+      available = FONT_PROBE_GENERICS.some(
+        (generic) => measure(`"${family}", ${generic}`) !== measure(generic)
+      );
+    } finally {
+      probe.remove();
+    }
+    cache.set(family, available);
+    return available;
+  }
+
   function countKanaByFont(roots) {
     const japaneseWebFonts = judge.collectJapaneseWebFontFamilies(document.fonts);
     const verdictCache = new Map();
@@ -368,7 +413,8 @@
         if (!verdict) {
           verdict = judge.classifyFontStack(
             judge.parseFontFamilyList(fontFamily),
-            japaneseWebFonts
+            japaneseWebFonts,
+            isFontAvailable
           );
           verdictCache.set(fontFamily, verdict);
         }

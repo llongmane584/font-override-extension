@@ -37,7 +37,8 @@
     "ｍｓ ゴシック",
   ];
 
-  // Japanese fonts that look fine on Windows (Noto Sans JP is assumed installed).
+  // Japanese fonts that look fine on Windows. They count only when the page
+  // can actually use them (see classifyFontStack).
   const GOOD_JP_FONTS = [
     "noto sans jp",
     "noto sans cjk jp",
@@ -132,12 +133,18 @@
   // Guess which family renders Japanese text on Windows.
   // "poor": a Windows bundled gothic font, "ok": anything else,
   // "ignore": icon / monospace text that Force leaves untouched anyway.
-  function classifyFontStack(families, japaneseWebFonts) {
+  // isFontAvailable(family) tells whether the page can actually use a locally
+  // installed font: it may be missing, and Brave hides user-installed fonts
+  // that a page names.
+  function classifyFontStack(families, japaneseWebFonts, isFontAvailable) {
     if (isPreservedFontStack(families)) return "ignore";
 
     for (const family of families) {
       if (japaneseWebFonts.has(family)) return "ok";
-      if (matchesFontName(family, GOOD_JP_FONTS)) return "ok";
+      if (matchesFontName(family, GOOD_JP_FONTS)) {
+        if (isFontAvailable(family)) return "ok";
+        continue;
+      }
       if (matchesFontName(family, WINDOWS_JP_FONTS)) return "poor";
       if (POOR_GENERIC_FAMILIES.includes(family)) return "poor";
       if (OTHER_GENERIC_FAMILIES.includes(family) || MINCHO_PATTERN.test(family)) {
