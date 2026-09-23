@@ -27,7 +27,8 @@ Windows環境で `system-ui` / `Yu Gothic UI` 等の見づらいフォントを 
 
 計算後の `font-family` を先頭から順に見て、日本語を描画するフォントを推定します。
 
-- 日本語をカバーする Web フォント、Noto Sans JP / BIZ UD ゴシック等 → 問題なし
+- 日本語をカバーする Web フォント → 問題なし
+- Noto Sans JP / BIZ UD ゴシック等 → ページから実際に使える場合だけ問題なし。インストールされていない、またはブラウザに隠されている（Brave。下記の注意を参照）場合は次の候補を見る。使えるかどうかは、そのフォントの有無で文字列の描画幅が変わるかで確かめる
 - 游ゴシック / メイリオ / MS ゴシック系 / `system-ui` / `sans-serif` → 見づらい
 - Hiragino・`-apple-system`・Segoe UI・Latin 専用の Web フォントなど、Windows にない・日本語を持たないフォント → 次の候補を見る
 - `serif` / 明朝 → 意図的な書体とみなして対象外
@@ -114,3 +115,4 @@ const DEFAULT_FONT = '"BIZ UDPGothic"'; // 例: BIZ UDPゴシック
 - Auto の判定はコンテンツスクリプトが動くサイトでのみ行われます。全サイトで使う場合はグローバル既定を ON にしてモードを Auto にしてください
 - パフォーマンスと「無効」ルールの一貫性を優先し、iframe 内の文書には自動適用しません
 - Noto Sans JP がシステムにインストールされていない場合、ブラウザの既定 sans-serif にフォールバックします
+- Brave はフィンガープリント対策で、インストールしたフォントをページが名前で指定しても使わせません。Force の `"Noto Sans JP"` も使われず、後ろの `sans-serif`（ブラウザの既定フォント）で描画されます。Brave で使う場合は `brave://settings/fonts` の Sans Serif フォントが Noto Sans JP になっていることを確認してください

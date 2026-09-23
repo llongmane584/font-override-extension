@@ -13,9 +13,15 @@ const {
 } = require("../font-judge.js");
 
 const NO_WEB_FONTS = new Set();
+const ALL_FONTS_AVAILABLE = () => true;
 
-function classify(fontFamily, webFonts = NO_WEB_FONTS) {
-  return classifyFontStack(parseFontFamilyList(fontFamily), webFonts);
+function classify(fontFamily, webFonts = NO_WEB_FONTS, isFontAvailable = ALL_FONTS_AVAILABLE) {
+  return classifyFontStack(parseFontFamilyList(fontFamily), webFonts, isFontAvailable);
+}
+
+// e.g. Brave hides user-installed fonts that a page names
+function unavailable(...hiddenFamilies) {
+  return (family) => !hiddenFamilies.includes(family);
 }
 
 test("computed font-family is split into normalized family names", () => {
@@ -46,9 +52,45 @@ test("good Japanese fonts stop the search before Windows fonts", () => {
   assert.equal(classify('"Source Han Sans JP", "Yu Gothic", sans-serif'), "ok");
 });
 
+test("good Japanese fonts the page cannot use fall through to the next family", () => {
+  const stack =
+    '"Hiragino Sans JP", -apple-system, BlinkMacSystemFont, "Noto Sans JP", "Noto Sans CJK JP", "Segoe UI", Meiryo, sans-serif';
+  assert.equal(classify(stack), "ok");
+  assert.equal(classify(stack, NO_WEB_FONTS, unavailable("noto sans jp")), "ok");
+  assert.equal(
+    classify(stack, NO_WEB_FONTS, unavailable("noto sans jp", "noto sans cjk jp")),
+    "poor"
+  );
+  assert.equal(
+    classify('"Noto Sans JP", "BIZ UDPGothic", Meiryo', NO_WEB_FONTS, unavailable("noto sans jp")),
+    "ok"
+  );
+});
+
+test("availability is asked only for good Japanese fonts", () => {
+  const asked = [];
+  const isFontAvailable = (family) => {
+    asked.push(family);
+    return false;
+  };
+  assert.equal(
+    classify('"Hiragino Sans", "Segoe UI", "Noto Sans JP Medium", Meiryo', NO_WEB_FONTS, isFontAvailable),
+    "poor"
+  );
+  assert.deepEqual(asked, ["noto sans jp medium"]);
+});
+
 test("a Japanese web font counts as a deliberate design", () => {
   const webFonts = new Set(["zen kaku gothic new"]);
   assert.equal(classify('"Zen Kaku Gothic New", Meiryo, sans-serif', webFonts), "ok");
+});
+
+test("a web font named like a good local font does not depend on the local font", () => {
+  const webFonts = new Set(["noto sans jp"]);
+  assert.equal(
+    classify('"Noto Sans JP", Meiryo, sans-serif', webFonts, unavailable("noto sans jp")),
+    "ok"
+  );
 });
 
 test("Windows font names only match whole words", () => {
